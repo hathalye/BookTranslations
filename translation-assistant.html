@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Translation Assistant — Phase 1</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#fbf8f3;--card:#ffffff;--text:#222;--muted:#666;--accent:#2b8aef}
+    html,body{height:100%;margin:0;font-family:Lato,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:980px;margin:28px auto;padding:18px}
+    header{display:flex;align-items:baseline;gap:12px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+    .card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(30,30,30,0.06);margin-top:14px}
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:16px}
+    textarea{width:100%;min-height:180px;padding:12px;border-radius:8px;border:1px solid #e6e6e6;font-size:16px;resize:vertical;font-family:inherit}
+    .controls{display:flex;flex-direction:column;gap:10px}
+    select,input[type=checkbox]{padding:8px;border-radius:6px;border:1px solid #e6e6e6;font-size:14px}
+    .row{display:flex;gap:10px}
+    button{background:var(--accent);color:white;border:none;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.secondary{background:#6c757d}
+    .result{white-space:pre-wrap;padding:12px;border-radius:8px;border:1px dashed #e9e9e9;min-height:140px;font-size:16px;background:#fafafa;margin-top:8px}
+    .muted{color:var(--muted);font-size:13px}
+    .small{font-size:13px}
+    .foot{margin-top:12px;color:var(--muted);font-size:13px}
+    .actions{display:flex;gap:8px;margin-top:8px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr;}.controls{order:2}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Translation Assistant</h1>
+      <p class="lead">Transliteration & basic translation for Hindi, Sanskrit, and English — Phase 1 prototype</p>
+    </header>
+
+    <div class="card grid">
+      <div>
+        <label class="small">Input text</label>
+        <textarea id="inputText" placeholder="Paste or type Hindi / Sanskrit (Devanagari) or English text here..."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button id="pasteBtn" class="secondary">Paste</button>
+          <button id="clearBtn" class="secondary">Clear</button>
+          <div style="flex:1"></div>
+          <div class="muted small">Tip: Ctrl+Enter to run</div>
+        </div>
+      </div>
+
+      <aside class="controls">
+        <div>
+          <label class="small">Source language</label>
+          <select id="srcLang">
+            <option value="en">English</option>
+            <option value="hi">Hindi (Devanagari)</option>
+            <option value="sa">Sanskrit (Devanagari)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="small">Target language</label>
+          <select id="tgtLang">
+            <option value="hi">Hindi (Devanagari)</option>
+            <option value="en">English</option>
+            <option value="sa">Sanskrit (Devanagari)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="small">Mode</label>
+          <select id="mode">
+            <option value="transliteration">Transliteration (script ↔ roman)</option>
+            <option value="literal">Literal translation (basic)</option>
+            <option value="meaning">Meaning-based (basic)</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-top:6px">
+          <button id="goBtn">Translate / Convert</button>
+          <button id="swapBtn" class="secondary">Swap</button>
+        </div>
+
+        <div class="foot">
+          <div class="muted">Notes:</div>
+          <ul style="margin:6px 0 0 18px;padding:0;color:var(--muted)">
+            <li>Sanskrit "meaning" support is limited in this free prototype; transliteration is local and works offline.</li>
+            <li>LibreTranslate is used for basic translation; internet required.</li>
+          </ul>
+        </div>
+      </aside>
+
+      <div style="grid-column:1 / -1;margin-top:6px">
+        <label class="small">Output</label>
+        <div id="result" class="result">Results show here.</div>
+        <div class="actions">
+          <button id="copyBtn">Copy Result</button>
+          <button id="speakBtn" class="secondary">Listen</button>
+          <button id="askBtn" class="secondary">Ask ChatGPT (copy prompt & open ChatGPT)</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="muted small" style="margin-top:12px">How to use: paste text → choose source/target/mode → press Translate. Transliteration uses Sanscript.js locally. For deeper/contextual translation use the ChatGPT helper.</p>
+  </div>
+
+  <!-- Sanscript (transliteration) - using unpkg CDN -->
+  <script src="https://unpkg.com/sanscript@1.1.9/sanscript.min.js"></script>
+  <script>
+    // Utility and UI wiring
+    const input = document.getElementById('inputText');
+    const src = document.getElementById('srcLang');
+    const tgt = document.getElementById('tgtLang');
+    const mode = document.getElementById('mode');
+    const goBtn = document.getElementById('goBtn');
+    const swapBtn = document.getElementById('swapBtn');
+    const resultDiv = document.getElementById('result');
+    const copyBtn = document.getElementById('copyBtn');
+    const speakBtn = document.getElementById('speakBtn');
+    const askBtn = document.getElementById('askBtn');
+    const pasteBtn = document.getElementById('pasteBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // Keyboard shortcut
+    input.addEventListener('keydown', (e)=>{ if(e.ctrlKey && e.key==='Enter'){ run(); } });
+
+    pasteBtn.addEventListener('click', async ()=>{
+      try{ const text = await navigator.clipboard.readText(); input.value = text; }catch(e){ alert('Paste failed: permission denied or not available'); }
+    });
+    clearBtn.addEventListener('click', ()=>{ input.value=''; resultDiv.textContent='Results show here.'; });
+
+    swapBtn.addEventListener('click', ()=>{ const s=src.value,t=tgt.value; src.value=t; tgt.value=s; });
+    copyBtn.addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(resultDiv.textContent); copyBtn.textContent='Copied!'; setTimeout(()=>copyBtn.textContent='Copy Result',1200);
+      }catch(e){ alert('Copy failed'); }
+    });
+
+    speakBtn.addEventListener('click', ()=>{
+      const t = resultDiv.textContent; if(!t) return; const utter = new SpeechSynthesisUtterance(t); // browser default language
+      // try set voice based on target language
+      const lang = tgt.value === 'hi' || tgt.value === 'sa' ? 'hi-IN' : 'en-US'; utter.lang = lang; speechSynthesis.speak(utter);
+    });
+
+    askBtn.addEventListener('click', async ()=>{
+      const text = input.value.trim(); if(!text){ alert('Please add input text first'); return; }
+      const prompt = `Please translate and explain the following text from ${langName(src.value)} to ${langName(tgt.value)} with literary/meaningful accuracy:\n\n${text}`;
+      try{ await navigator.clipboard.writeText(prompt); window.open('https://chat.openai.com','_blank'); alert('Prompt copied to clipboard. Paste into ChatGPT and send.'); }catch(e){ window.open('https://chat.openai.com','_blank'); }
+    });
+
+    goBtn.addEventListener('click', run);
+
+    function langName(code){ return code==='en' ? 'English' : code==='hi' ? 'Hindi (Devanagari)' : 'Sanskrit (Devanagari)'; }
+
+    async function run(){
+      const text = input.value.trim(); if(!text){ alert('Input is empty'); return; }
+      const source = src.value; const target = tgt.value; const m = mode.value;
+
+      // Transliteration mode (local)
+      if(m === 'transliteration'){
+        // If source script is Devanagari -> Roman (ITRANS)
+        if(source === 'hi' || source === 'sa'){
+          // Use Sanscript to transliterate Devanagari -> itrans (ASCII-based romanization)
+          try{
+            const out = Sanscript.t(text, 'devanagari', 'itrans'); resultDiv.textContent = out; return;
+          }catch(e){ resultDiv.textContent = 'Transliteration failed. Is Sanscript loaded? ' + e.message; return; }
+        }
+        // If source is English and target is Hindi/Sanskrit, attempt Roman->Devanagari via itrans
+        if(source === 'en' && (target === 'hi' || target === 'sa')){
+          try{
+            // Expecting romanized Sanskrit/Hindi in ITRANS or similar. This will not convert plain English words to Hindi.
+            const out = Sanscript.t(text, 'itrans', 'devanagari'); resultDiv.textContent = out; return;
+          }catch(e){ resultDiv.textContent = 'Reverse transliteration failed. Make sure input is romanized ITRANS/IAST style.'; return; }
+        }
+        resultDiv.textContent = 'Transliteration direction unsupported for selected languages.'; return;
+      }
+
+      // For translation modes, use LibreTranslate public endpoint (free demo)
+      // Note: Sanskrit is not well-supported by LibreTranslate. We'll map Sanskrit to Hindi where needed.
+      let libSource = source === 'sa' ? 'hi' : source;
+      let libTarget = target === 'sa' ? 'hi' : target;
+
+      // If source or target was Sanskrit, inform the user briefly
+      if(source === 'sa' || target === 'sa'){
+        resultDiv.textContent = 'Note: Sanskrit support is limited in this free prototype. Attempting translation via Hindi as an intermediate where possible...\n\n';
+      }else{
+        resultDiv.textContent = 'Translating...';
+      }
+
+      try{
+        const res = await fetch('https://libretranslate.com/translate',{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({q:text,source:libSource,target:libTarget,format:'text'})
+        });
+        if(!res.ok){ throw new Error('Translation API error: ' + res.status); }
+        const data = await res.json();
+        let out = data.translatedText || '';
+        // If either side was Sanskrit, attempt to re-transliterate when requested
+        if(target === 'sa'){
+          // out is in Hindi (Devanagari). If it's not in Devanagari, leave as-is.
+          try{ out = Sanscript.t(out, 'devanagari', 'devanagari'); }catch(e){}
+        }
+        resultDiv.textContent = (resultDiv.textContent ? resultDiv.textContent + '\n\n' : '') + out;
+      }catch(err){
+        resultDiv.textContent = 'Translation failed: ' + err.message + '\n\nYou can still use Transliteration mode offline.';
+      }
+    }
+  </script>
+</body>
+</html>
