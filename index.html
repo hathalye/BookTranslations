@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Translation Assistant — Phase 1 Offline Stable</title>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fbf8f3;--card:#ffffff;--text:#222;--muted:#666;--accent:#2b8aef}
+html,body{height:100%;margin:0;font-family:Lato,system-ui,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:980px;margin:28px auto;padding:18px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-size:20px;margin:0}
+p.lead{margin:0;color:var(--muted);font-size:13px}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 6px 18px rgba(30,30,30,0.06);margin-top:14px}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start;}
+textarea, .result{width:100%;min-height:180px;padding:12px;border-radius:8px;border:1px solid #e6e6e6;font-size:16px;resize:vertical;font-family:'Noto Sans Devanagari', Lato, sans-serif;box-sizing:border-box;}
+.controls{display:flex;flex-direction:column;gap:10px;min-width:260px;}
+select,input[type=checkbox]{padding:8px;border-radius:6px;border:1px solid #e6e6e6;font-size:14px}
+.row{display:flex;gap:10px}
+button{background:var(--accent);color:white;border:none;padding:10px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+button.secondary{background:#6c757d}
+.result{white-space:pre-wrap;padding:12px;border-radius:8px;border:1px dashed #e9e9e9;min-height:140px;font-size:16px;background:#fafafa;margin-top:8px}
+.muted{color:var(--muted);font-size:13px}
+.small{font-size:13px}
+.foot{margin-top:12px;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;margin-top:8px}
+@media(max-width:900px){.grid{grid-template-columns:1fr;}.controls{width:100%;order:2;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>Translation Assistant</h1>
+<p class="lead">Transliteration & basic translation for Hindi, Sanskrit, and English — Phase 1 Offline Stable</p>
+</header>
+<div class="card grid">
+<div>
+<label class="small">Input text</label>
+<textarea id="inputText" placeholder="Paste or type text here (Hindi/Sanskrit/English)..."></textarea>
+<div class="row" style="margin-top:8px">
+<button id="pasteBtn" class="secondary">Paste</button>
+<button id="clearBtn" class="secondary">Clear</button>
+<div style="flex:1"></div>
+<div class="muted small">Tip: Ctrl+Enter to run</div>
+</div>
+<p class="muted small" id="translitHint">Transliteration mode expects Romanized Hindi/Sanskrit input (e.g., 'shree krishna').</p>
+</div>
+<aside class="controls">
+<div>
+<label class="small">Source language</label>
+<select id="srcLang">
+<option value="hi" selected>Hindi (Devanagari)</option>
+<option value="en">English</option>
+<option value="sa">Sanskrit (Devanagari)</option>
+</select>
+</div>
+<div>
+<label class="small">Target language</label>
+<select id="tgtLang">
+<option value="en" selected>English</option>
+<option value="hi">Hindi (Devanagari)</option>
+<option value="sa">Sanskrit (Devanagari)</option>
+</select>
+</div>
+<div>
+<label class="small">Mode</label>
+<select id="mode">
+<option value="literal" selected>Literal translation (basic)</option>
+<option value="meaning">Meaning-based (basic)</option>
+<option value="transliteration">Transliteration (Roman ↔ Devanagari)</option>
+</select>
+</div>
+<div class="row" style="margin-top:6px">
+<button id="goBtn">Translate / Convert</button>
+<button id="swapBtn" class="secondary">Swap</button>
+</div>
+</aside>
+<div style="grid-column:1 / -1;margin-top:6px">
+<label class="small">Output</label>
+<div id="result" class="result">Results show here.</div>
+<div class="actions">
+<button id="copyBtn">Copy Result</button>
+<button id="speakBtn" class="secondary">Listen</button>
+<button id="askBtn" class="secondary">Ask ChatGPT (copy prompt & open ChatGPT)</button>
+</div>
+</div>
+</div>
+</div>
+<script src="https://unpkg.com/sanscript@1.1.9/sanscript.min.js"></script>
+<script>
+const input=document.getElementById('inputText');
+const src=document.getElementById('srcLang');
+const tgt=document.getElementById('tgtLang');
+const mode=document.getElementById('mode');
+const goBtn=document.getElementById('goBtn');
+const swapBtn=document.getElementById('swapBtn');
+const resultDiv=document.getElementById('result');
+const copyBtn=document.getElementById('copyBtn');
+const speakBtn=document.getElementById('speakBtn');
+const askBtn=document.getElementById('askBtn');
+const pasteBtn=document.getElementById('pasteBtn');
+const clearBtn=document.getElementById('clearBtn');
+const translitHint=document.getElementById('translitHint');
+
+input.addEventListener('keydown',(e)=>{if(e.ctrlKey&&e.key==='Enter'){run();}});
+pasteBtn.addEventListener('click',async()=>{try{const text=await navigator.clipboard.readText();input.value=text;}catch(e){alert('Paste failed');}});
+clearBtn.addEventListener('click',()=>{input.value='';resultDiv.textContent='Results show here.';});
+swapBtn.addEventListener('click',()=>{const s=src.value,t=tgt.value;src.value=t;tgt.value=s;});
+copyBtn.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(resultDiv.textContent);copyBtn.textContent='Copied!';setTimeout(()=>copyBtn.textContent='Copy Result',1200);}catch(e){alert('Copy failed');}});
+speakBtn.addEventListener('click',()=>{const t=resultDiv.textContent;if(!t)return;const utter=new SpeechSynthesisUtterance(t);utter.lang=tgt.value==='hi'||tgt.value==='sa'?'hi-IN':'en-US';speechSynthesis.speak(utter);});
+askBtn.addEventListener('click',()=>{alert('Copy prompt from input/output and paste into ChatGPT.');});
+goBtn.addEventListener('click',run);
+
+function langName(code){return code==='en'?'English':code==='hi'?'Hindi':'Sanskrit';}
+
+function run(){
+  const text=input.value.trim();
+  if(!text){resultDiv.textContent='Please enter text first.';return;}
+  const m=mode.value;
+  if(m==='transliteration'){
+    translitHint.style.display='block';
+    try{
+      let out;
+      out=Sanscript.t(text,'itrans','devanagari');
+      resultDiv.textContent=out;
+    }catch(e){resultDiv.textContent='Transliteration failed. Ensure input is Romanized IAST/ITRANS.';}
+  } else {
+    translitHint.style.display='none';
+    resultDiv.textContent='Translation requires online API and may not work on GitHub Pages due to browser restrictions.';
+  }
+}
+
+mode.addEventListener('change',()=>{
+  if(mode.value==='transliteration'){
+    translitHint.style.display='block';
+  } else {
+    translitHint.style.display='none';
+  }
+});
+</script>
+</body>
+</html>
